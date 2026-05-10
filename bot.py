@@ -14,64 +14,49 @@ from telegram.ext import (
     filters
 )
 
-# =====================================================
-# TELEGRAM TOKEN
-# =====================================================
-
 TOKEN = os.getenv("TOKEN")
 
-# =====================================================
-# RENDER KEEP-ALIVE WEB SERVER
-# =====================================================
+# =========================================
+# WEB SERVER FOR RENDER
+# =========================================
 
 web_app = Flask(__name__)
 
 @web_app.route("/")
 def home():
-    return "OTC AI BOT RUNNING"
+    return "BOT RUNNING"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port)
 
-Thread(target=run_web).start()
-
-# =====================================================
-# GLOBAL SETTINGS
-# =====================================================
+# =========================================
+# SETTINGS
+# =========================================
 
 selected_timeframe = "15s"
 
-# =====================================================
+# =========================================
 # START COMMAND
-# =====================================================
+# =========================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = """
-🤖 OTC AI INSTITUTIONAL BOT
+🤖 OTC AI SIGNAL BOT
 
-Send Pocket Option screenshot.
+Send chart screenshot.
 
 Commands:
-
 /15s
 /30s
-
-Features:
-✅ AI chart analysis
-✅ Trend detection
-✅ Momentum analysis
-✅ Volatility detection
-✅ Institutional pressure analysis
-✅ BUY / SELL / WAIT signal
 """
 
     await update.message.reply_text(text)
 
-# =====================================================
-# TIMEFRAME COMMANDS
-# =====================================================
+# =========================================
+# TIMEFRAME
+# =========================================
 
 async def mode_15(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -93,256 +78,177 @@ async def mode_30(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚡ 30s mode activated"
     )
 
-# =====================================================
-# AI ANALYSIS ENGINE
-# =====================================================
+# =========================================
+# ANALYSIS ENGINE
+# =========================================
 
 def analyze_chart(image_path):
 
-    image = cv2.imread(image_path)
+    try:
 
-    if image is None:
-        return "❌ Could not analyze screenshot"
+        image = cv2.imread(image_path)
 
-    height, width, _ = image.shape
+        if image is None:
+            return "❌ Could not read screenshot"
 
-    # =========================================
-    # CROP CHART AREA
-    # =========================================
+        height, width, _ = image.shape
 
-    chart = image[:, int(width * 0.55):]
+        chart = image[:, int(width * 0.55):]
 
-    hsv = cv2.cvtColor(chart, cv2.COLOR_BGR2HSV)
+        hsv = cv2.cvtColor(chart, cv2.COLOR_BGR2HSV)
 
-    # =========================================
-    # GREEN CANDLE DETECTION
-    # =========================================
+        # GREEN
 
-    lower_green = np.array([35, 40, 40])
-    upper_green = np.array([90, 255, 255])
+        lower_green = np.array([35, 40, 40])
+        upper_green = np.array([90, 255, 255])
 
-    green_mask = cv2.inRange(
-        hsv,
-        lower_green,
-        upper_green
-    )
+        green_mask = cv2.inRange(
+            hsv,
+            lower_green,
+            upper_green
+        )
 
-    # =========================================
-    # RED CANDLE DETECTION
-    # =========================================
+        # RED
 
-    lower_red1 = np.array([0, 50, 50])
-    upper_red1 = np.array([10, 255, 255])
+        lower_red1 = np.array([0, 50, 50])
+        upper_red1 = np.array([10, 255, 255])
 
-    lower_red2 = np.array([170, 50, 50])
-    upper_red2 = np.array([180, 255, 255])
+        lower_red2 = np.array([170, 50, 50])
+        upper_red2 = np.array([180, 255, 255])
 
-    red_mask1 = cv2.inRange(
-        hsv,
-        lower_red1,
-        upper_red1
-    )
+        red_mask1 = cv2.inRange(
+            hsv,
+            lower_red1,
+            upper_red1
+        )
 
-    red_mask2 = cv2.inRange(
-        hsv,
-        lower_red2,
-        upper_red2
-    )
+        red_mask2 = cv2.inRange(
+            hsv,
+            lower_red2,
+            upper_red2
+        )
 
-    red_mask = red_mask1 + red_mask2
+        red_mask = red_mask1 + red_mask2
 
-    # =========================================
-    # PRESSURE ANALYSIS
-    # =========================================
+        # STRENGTH
 
-    green_strength = np.sum(green_mask > 0)
-    red_strength = np.sum(red_mask > 0)
+        green_strength = np.sum(green_mask > 0)
+        red_strength = np.sum(red_mask > 0)
 
-    total_strength = green_strength + red_strength + 1
+        total = green_strength + red_strength + 1
 
-    bullish_pressure = green_strength / total_strength
-    bearish_pressure = red_strength / total_strength
+        bullish = green_strength / total
+        bearish = red_strength / total
 
-    # =========================================
-    # TREND DETECTION
-    # =========================================
+        # VOLATILITY
 
-    gray = cv2.cvtColor(chart, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(chart, cv2.COLOR_BGR2GRAY)
 
-    edges = cv2.Canny(gray, 50, 150)
+        volatility = int(np.std(gray))
 
-    lines = cv2.HoughLinesP(
-        edges,
-        1,
-        np.pi / 180,
-        threshold=50,
-        minLineLength=40,
-        maxLineGap=10
-    )
+        # MOMENTUM
 
-    trend_score = 0
+        momentum = abs(
+            green_strength - red_strength
+        )
 
-    if lines is not None:
+        # SIGNAL
 
-        for line in lines[:30]:
+        signal = "⚪ WAIT"
+        confidence = 50
+        reason = "Market unclear"
 
-            x1, y1, x2, y2 = line[0]
+        if bullish > 0.58 and momentum > 1500:
 
-            slope = (y2 - y1) / (x2 - x1 + 1)
-
-            trend_score += slope
-
-    # =========================================
-    # VOLATILITY DETECTION
-    # =========================================
-
-    volatility = np.std(gray)
-
-    # =========================================
-    # MARKET MOMENTUM
-    # =========================================
-
-    momentum = abs(green_strength - red_strength)
-
-    # =========================================
-    # AI DECISION ENGINE
-    # =========================================
-
-    signal = "⚪ WAIT"
-
-    confidence = 50
-
-    market_reason = "Market unclear"
-
-    # =========================================
-    # BUY SIGNAL
-    # =========================================
-
-    if (
-        bullish_pressure > 0.58
-        and trend_score < -5
-        and volatility > 35
-        and momentum > 1500
-    ):
-
-        signal = "🟢 BUY"
-
-        confidence = int(
-            min(
-                95,
-                60 + bullish_pressure * 40
+            signal = "🟢 BUY"
+            confidence = int(
+                min(95, 60 + bullish * 40)
             )
-        )
 
-        market_reason = (
-            "Bullish institutional momentum detected"
-        )
+            reason = "Bullish pressure detected"
 
-    # =========================================
-    # SELL SIGNAL
-    # =========================================
+        elif bearish > 0.58 and momentum > 1500:
 
-    elif (
-        bearish_pressure > 0.58
-        and trend_score > 5
-        and volatility > 35
-        and momentum > 1500
-    ):
-
-        signal = "🔴 SELL"
-
-        confidence = int(
-            min(
-                95,
-                60 + bearish_pressure * 40
+            signal = "🔴 SELL"
+            confidence = int(
+                min(95, 60 + bearish * 40)
             )
+
+            reason = "Bearish pressure detected"
+
+        if selected_timeframe == "15s":
+            entry = "1-3 Seconds"
+        else:
+            entry = "3-8 Seconds"
+
+        strength = int(
+            max(bullish, bearish) * 100
         )
 
-        market_reason = (
-            "Bearish institutional momentum detected"
-        )
-
-    # =========================================
-    # ENTRY WINDOW
-    # =========================================
-
-    if selected_timeframe == "15s":
-
-        entry_window = "1-3 Seconds"
-
-    else:
-
-        entry_window = "3-8 Seconds"
-
-    # =========================================
-    # MARKET STRENGTH
-    # =========================================
-
-    market_strength = int(
-        max(
-            bullish_pressure,
-            bearish_pressure
-        ) * 100
-    )
-
-    # =========================================
-    # FINAL RESULT
-    # =========================================
-
-    result = f"""
+        return f"""
 {signal}
 
 ⏱ Timeframe:
 {selected_timeframe}
 
 ⚡ Entry Window:
-{entry_window}
+{entry}
 
 📊 Market Strength:
-{market_strength}%
+{strength}%
 
 🔥 Confidence:
 {confidence}%
 
-🧠 AI Analysis:
-{market_reason}
+🧠 Analysis:
+{reason}
 
 📈 Volatility:
-{int(volatility)}
+{volatility}
 
 💥 Momentum:
 {momentum}
-
-📸 Institutional chart analysis completed
 """
 
-    return result
+    except Exception as e:
 
-# =====================================================
-# PHOTO ANALYSIS HANDLER
-# =====================================================
+        return f"❌ Error: {str(e)}"
+
+# =========================================
+# PHOTO HANDLER
+# =========================================
 
 async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    photo = update.message.photo[-1]
+    try:
 
-    file = await context.bot.get_file(
-        photo.file_id
-    )
+        photo = update.message.photo[-1]
 
-    image_path = "chart.jpg"
+        file = await context.bot.get_file(
+            photo.file_id
+        )
 
-    await file.download_to_drive(image_path)
+        image_path = "chart.jpg"
 
-    result = analyze_chart(image_path)
+        await file.download_to_drive(image_path)
 
-    await update.message.reply_text(result)
+        result = analyze_chart(image_path)
 
-# =====================================================
+        await update.message.reply_text(result)
+
+    except Exception as e:
+
+        await update.message.reply_text(
+            f"❌ Failed: {str(e)}"
+        )
+
+# =========================================
 # MAIN
-# =====================================================
+# =========================================
 
 def main():
+
+    Thread(target=run_web).start()
 
     app = Application.builder().token(TOKEN).build()
 
@@ -365,7 +271,7 @@ def main():
         )
     )
 
-    print("🤖 OTC AI BOT RUNNING...")
+    print("BOT RUNNING")
 
     app.run_polling()
 
