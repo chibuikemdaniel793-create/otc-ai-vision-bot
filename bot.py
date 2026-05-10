@@ -1,8 +1,5 @@
 import os
-
-from flask import Flask
-from threading import Thread
-
+import random
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -12,110 +9,35 @@ from telegram.ext import (
     filters
 )
 
-# =========================================
-# TOKEN
-# =========================================
-
 TOKEN = os.getenv("TOKEN")
 
-# =========================================
-# KEEP RENDER ALIVE
-# =========================================
-
-web_app = Flask(__name__)
-
-@web_app.route("/")
-def home():
-    return "BOT IS RUNNING"
-
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    web_app.run(host="0.0.0.0", port=port)
-
-Thread(target=run_web).start()
-
-# =========================================
-# GLOBAL TIMEFRAME
-# =========================================
-
-selected_timeframe = "15s"
-
-# =========================================
 # START COMMAND
-# =========================================
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    text = f"""
-🤖 OTC SIGNAL BOT
-
-Send chart screenshot.
-
-Commands:
-
-/15s
-/30s
-
-Current timeframe:
-{selected_timeframe}
-"""
-
-    await update.message.reply_text(text)
-
-# =========================================
-# TIMEFRAME COMMANDS
-# =========================================
-
-async def mode_15(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    global selected_timeframe
-
-    selected_timeframe = "15s"
-
     await update.message.reply_text(
-        "⚡ 15s mode activated"
+        "🤖 OTC Signal Bot Active\n\nSend chart screenshot."
     )
 
-async def mode_30(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    global selected_timeframe
-
-    selected_timeframe = "30s"
-
-    await update.message.reply_text(
-        "⚡ 30s mode activated"
-    )
-
-# =========================================
-# SIMPLE SIGNAL ENGINE
-# =========================================
-
+# PHOTO HANDLER
 async def analyze(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    result = f"""
-🟢 BUY SIGNAL
+    signals = [
+        "🟢 BUY",
+        "🔴 SELL",
+        "⚪ WAIT"
+    ]
 
-⏱ Timeframe:
-{selected_timeframe}
+    result = random.choice(signals)
 
-🔥 Confidence:
-78%
+    await update.message.reply_text(
+        f"""
+{result}
 
-📊 Market Condition:
-Trending Market
-
-⚡ Entry:
-Wait for candle confirmation
-
-✅ Bot running successfully
+📊 Simple Signal Generated
+⚡ Bot is responding correctly
 """
+    )
 
-    await update.message.reply_text(result)
-
-# =========================================
 # MAIN
-# =========================================
-
 def main():
 
     app = Application.builder().token(TOKEN).build()
@@ -125,21 +47,13 @@ def main():
     )
 
     app.add_handler(
-        CommandHandler("15s", mode_15)
-    )
-
-    app.add_handler(
-        CommandHandler("30s", mode_30)
-    )
-
-    app.add_handler(
         MessageHandler(
             filters.PHOTO,
             analyze
         )
     )
 
-    print("BOT RUNNING...")
+    print("BOT STARTED")
 
     app.run_polling()
 
